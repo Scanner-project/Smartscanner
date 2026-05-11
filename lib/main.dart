@@ -1,12 +1,24 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'firebase_options.dart';
 import 'components/dashboard.dart';
+import 'components/camera_scanner.dart';
 import 'services/storage_service.dart';
 import 'types.dart';
 
-void main() async {
+void main() async { 
   WidgetsFlutterBinding.ensureInitialized();
   final cameras = await availableCameras();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(MyApp(cameras: cameras));
 }
 
@@ -69,6 +81,144 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _saveData() async {
     await StorageService.saveReceipts(receipts, monthlyBudget);
+  }
+
+  Future<void> _processReceipt(String imagePath) async {
+    // 1. Scanner eka wahala Loading screen eka on karanawa
+    setState(() {
+      showScanner = false;
+      isAnalyzing = true;
+    });
+
+    try {
+      // 2. ML Kit eken Photo eke thiyena Text eka kiyawanawa (Offline & Free!)
+      final inputImage = InputImage.fromFilePath(imagePath);
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      
+      String fullText = recognizedText.text;
+      textRecognizer.close();
+
+      // 3. Text eken API data gannawa (Podi AI Logic ekak)
+      String shopName = "Unknown Shop";
+      double totalAmount = 0.0;
+      String date = DateTime.now().toIso8601String(); // Danata adu dawasa
+
+      List<String> lines = fullText.split('\n');
+      if (lines.isNotEmpty) {
+        shopName = lines.first; // Godak welawata kade nama thiyenne udama line eke
+      }
+
+      // Total eka hoyana podi trick ekak
+      final RegExp priceRegex = RegExp(r'\b\d+\.\d{2}\b');
+      final matches = priceRegex.allMatches(fullText);
+      for (final Match m in matches) {
+        double val = double.tryParse(m[0]!) ?? 0.0;
+        if (val > totalAmount) totalAmount = val;
+      }
+
+      // 4. Data tika Firebase (Firestore) ekata save karanawa
+      await FirebaseFirestore.instance.collection('receipts').add({
+        'storeName': shopName,
+        'totalAmount': totalAmount,
+        'date': date,
+        'category': 'Other', 
+        'rawText': fullText, 
+      });
+
+      // 5. App eke data reload karanawa
+      await _loadData();
+
+    } catch (e) {
+      setState(() => analysisError = "Error scanning: $e");
+    } finally {
+      // Loading eka iwara karanawa
+      setState(() => isAnalyzing = false);
+    }
+  }
+
+  // Gallery eken photo ekak ganna code eka
+  Future<void> _pickFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      // Photo eka gaththama eka kelinma ML Kit Brain ekata yawenawa
+      setState(() => isFabOpen = false); 
+      await _processReceipt(pickedFile.path); 
+    }
+  }
+
+  // Camera da Gallery da kiyala ahana yatin ena menu eka
+  void _showImageSourceOptions() {
+    setState(() => isFabOpen = true);
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildOptionBtn(
+                  icon: Icons.camera_alt,
+                  label: 'Camera',
+                  onTap: () {
+                    Navigator.pop(context); // Menu eka wahanawa
+                    setState(() {
+                      isFabOpen = false;
+                      showScanner = true; // Camera eka on karanawa
+                    });
+                  },
+                ),
+                _buildOptionBtn(
+                  icon: Icons.photo_library,
+                  label: 'Gallery',
+                  onTap: () {
+                    Navigator.pop(context); // Menu eka wahanawa
+                    _pickFromGallery(); // Gallery eka open karanawa
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      // Menu eka nikan pallaha addala wahuwoth + icon eka normal wenna
+      if (mounted) setState(() => isFabOpen = false);
+    });
+  }
+
+  // Menu eke thiyena lassan buttons hadana kalla
+  Widget _buildOptionBtn({required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF334155),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF8B5CF6), size: 32),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label, 
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+          ),
+        ],
+      ),
+    );
   }
 
   void _changeBudget() {
@@ -229,7 +379,7 @@ class _HomePageState extends State<HomePage> {
               bottom: 100,
               right: 16,
               child: FloatingActionButton(
-                onPressed: () => setState(() => isFabOpen = !isFabOpen),
+                onPressed: _showImageSourceOptions,
                 backgroundColor: const Color(0xFF8B5CF6),
                 child: Icon(isFabOpen ? Icons.close : Icons.add, color: Colors.white),
               ),
@@ -256,6 +406,13 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             if (showBudgetModal) _buildBudgetModal(),
+            if (showScanner)
+              Positioned.fill(
+                child: CameraScanner(
+                  onCapture: _processReceipt, 
+                  onClose: () => setState(() => showScanner = false),
+                ),
+              ),
             if (isAnalyzing) _buildAnalyzingOverlay(),
           ],
         ),
