@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_entity_extraction/google_mlkit_entity_extraction.dart'; // Aluth AI Model eka
 import 'package:image_picker/image_picker.dart';
 
 import 'firebase_options.dart';
@@ -83,41 +84,60 @@ class _HomePageState extends State<HomePage> {
     await StorageService.saveReceipts(receipts, monthlyBudget);
   }
 
+  // ==========================================================
+  // MEKA THAMAI ALUTH "PRO AI BRAIN" EKA 🔥
+  // ==========================================================
   Future<void> _processReceipt(String imagePath) async {
-    // 1. Scanner eka wahala Loading screen eka on karanawa
     setState(() {
       showScanner = false;
       isAnalyzing = true;
     });
 
     try {
-      // 2. ML Kit eken Photo eke thiyena Text eka kiyawanawa (Offline & Free!)
+      // 1. Text Recognizer eken Photo eke thiyena akuru tika mulin kiyawagannawa
       final inputImage = InputImage.fromFilePath(imagePath);
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
       
       String fullText = recognizedText.text;
+      List<String> lines = fullText.split('\n');
       textRecognizer.close();
 
-      // 3. Text eken API data gannawa (Podi AI Logic ekak)
-      String shopName = "Unknown Shop";
+      // 2. Aluth Entity Extractor Model eka start karanawa
+      // Meken thama e akuru asse thiyena "Theruma" (Dates, Money) allanne
+      final entityExtractor = EntityExtractor(language: EntityExtractorLanguage.english);
+      final annotations = await entityExtractor.annotateText(fullText);
+
+      String shopName = lines.isNotEmpty ? lines.first.trim() : "Unknown Shop";
       double totalAmount = 0.0;
-      String date = DateTime.now().toIso8601String(); // Danata adu dawasa
+      String date = DateTime.now().toIso8601String(); // Default date eka ada dawasa
 
-      List<String> lines = fullText.split('\n');
-      if (lines.isNotEmpty) {
-        shopName = lines.first; // Godak welawata kade nama thiyenne udama line eke
+      // AI eka hoyagaththa dewal (Annotations) asse yanawa
+      for (final annotation in annotations) {
+        for (final entity in annotation.entities) {
+          
+          // A. Salli Ganan (Money) model eken alluwada balanawa
+          if (entity.type == EntityType.money) {
+            // "Rs 1500" wage aawoth akuru tika ain karala 1500 gannawa
+            String moneyText = annotation.text.replaceAll(RegExp(r'[^0-9.]'), '');
+            double val = double.tryParse(moneyText) ?? 0.0;
+            
+            // Receipt ekaka thiyena loku ma ganana apage "Total" eka widihata gannawa
+            if (val > totalAmount) {
+              totalAmount = val;
+            }
+          }
+          
+          // B. Dawasa (Date/Time) model eken alluwada balanawa
+          else if (entity.type == EntityType.dateTime) {
+            date = annotation.text; // AI eka extract karapu dawasa ehemma gannawa
+          }
+        }
       }
+      
+      entityExtractor.close();
 
-      // Total eka hoyana podi trick ekak
-      final RegExp priceRegex = RegExp(r'\b\d+\.\d{2}\b');
-      final matches = priceRegex.allMatches(fullText);
-      for (final Match m in matches) {
-        double val = double.tryParse(m[0]!) ?? 0.0;
-        if (val > totalAmount) totalAmount = val;
-      }
-
-      // 4. Data tika Firebase (Firestore) ekata save karanawa
+      // 3. Database ekata save karanawa
       await FirebaseFirestore.instance.collection('receipts').add({
         'storeName': shopName,
         'totalAmount': totalAmount,
@@ -126,30 +146,27 @@ class _HomePageState extends State<HomePage> {
         'rawText': fullText, 
       });
 
-      // 5. App eke data reload karanawa
+      // 4. App eke UI eka update karanawa
       await _loadData();
 
     } catch (e) {
       setState(() => analysisError = "Error scanning: $e");
     } finally {
-      // Loading eka iwara karanawa
       setState(() => isAnalyzing = false);
     }
   }
+  // ==========================================================
 
-  // Gallery eken photo ekak ganna code eka
   Future<void> _pickFromGallery() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     
     if (pickedFile != null) {
-      // Photo eka gaththama eka kelinma ML Kit Brain ekata yawenawa
       setState(() => isFabOpen = false); 
       await _processReceipt(pickedFile.path); 
     }
   }
 
-  // Camera da Gallery da kiyala ahana yatin ena menu eka
   void _showImageSourceOptions() {
     setState(() => isFabOpen = true);
     
@@ -170,10 +187,10 @@ class _HomePageState extends State<HomePage> {
                   icon: Icons.camera_alt,
                   label: 'Camera',
                   onTap: () {
-                    Navigator.pop(context); // Menu eka wahanawa
+                    Navigator.pop(context);
                     setState(() {
                       isFabOpen = false;
-                      showScanner = true; // Camera eka on karanawa
+                      showScanner = true;
                     });
                   },
                 ),
@@ -181,8 +198,8 @@ class _HomePageState extends State<HomePage> {
                   icon: Icons.photo_library,
                   label: 'Gallery',
                   onTap: () {
-                    Navigator.pop(context); // Menu eka wahanawa
-                    _pickFromGallery(); // Gallery eka open karanawa
+                    Navigator.pop(context);
+                    _pickFromGallery();
                   },
                 ),
               ],
@@ -191,12 +208,10 @@ class _HomePageState extends State<HomePage> {
         );
       },
     ).whenComplete(() {
-      // Menu eka nikan pallaha addala wahuwoth + icon eka normal wenna
       if (mounted) setState(() => isFabOpen = false);
     });
   }
 
-  // Menu eke thiyena lassan buttons hadana kalla
   Widget _buildOptionBtn({required IconData icon, required String label, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -676,7 +691,7 @@ class _HomePageState extends State<HomePage> {
               ),
               SizedBox(height: 8),
               Text(
-                'Extracting data using Gemini AI',
+                'Extracting data using Entity Extractor AI',
                 style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
               ),
             ],
