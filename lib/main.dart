@@ -47,7 +47,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<Receipt> receipts = [];
   List<GalleryImage> galleryImages = [];
   bool showScanner = false;
@@ -59,10 +59,34 @@ class _HomePageState extends State<HomePage> {
   bool showBudgetModal = false;
   String tempBudget = '20000';
 
+  late AnimationController _fabController;
+  late AnimationController _tabController;
+  late AnimationController _modalController;
+
   @override
   void initState() {
     super.initState();
+    _fabController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _tabController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _modalController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _fabController.dispose();
+    _tabController.dispose();
+    _modalController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -412,16 +436,23 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 Expanded(
-                  child: IndexedStack(
-                    index: activeTab,
-                    children: [
-                      Dashboard(
-                        receipts: receipts,
-                        monthlyBudget: monthlyBudget,
-                      ),
-                      _buildGalleryTab(),
-                      _buildHistoryTab(),
-                    ],
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+                    child: IndexedStack(
+                      key: ValueKey<int>(activeTab),
+                      index: activeTab,
+                      children: [
+                        Dashboard(
+                          receipts: receipts,
+                          monthlyBudget: monthlyBudget,
+                        ),
+                        _buildGalleryTab(),
+                        _buildHistoryTab(),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -430,12 +461,25 @@ class _HomePageState extends State<HomePage> {
             Positioned(
               bottom: 100,
               right: 16,
-              child: FloatingActionButton(
-                onPressed: _showImageSourceOptions,
-                backgroundColor: const Color(0xFF8B5CF6),
-                child: Icon(
-                  isFabOpen ? Icons.close : Icons.add,
-                  color: Colors.white,
+              child: RotationTransition(
+                turns: Tween<double>(
+                  begin: 0,
+                  end: 0.125,
+                ).animate(_fabController),
+                child: FloatingActionButton(
+                  onPressed: () {
+                    _showImageSourceOptions();
+                    if (isFabOpen) {
+                      _fabController.reverse();
+                    } else {
+                      _fabController.forward();
+                    }
+                  },
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  child: Icon(
+                    isFabOpen ? Icons.close : Icons.add,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -481,18 +525,33 @@ class _HomePageState extends State<HomePage> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isActive = activeTab == index;
     return GestureDetector(
-      onTap: () => setState(() => activeTab = index),
+      onTap: () {
+        setState(() => activeTab = index);
+        _tabController.forward(from: 0);
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: isActive ? const Color(0xFF818CF8) : const Color(0xFF64748B),
-            size: 24,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.2)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: isActive
+                  ? const Color(0xFF818CF8)
+                  : const Color(0xFF64748B),
+              size: 24,
+            ),
           ),
           const SizedBox(height: 4),
-          Text(
-            label,
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
             style: TextStyle(
               color: isActive
                   ? const Color(0xFF818CF8)
@@ -500,6 +559,7 @@ class _HomePageState extends State<HomePage> {
               fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
+            child: Text(label),
           ),
         ],
       ),
@@ -557,35 +617,59 @@ class _HomePageState extends State<HomePage> {
           itemCount: galleryImages.length,
           itemBuilder: (context, index) {
             final img = galleryImages[index];
-            return Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                border: Border.all(color: const Color(0xFF334155)),
-                borderRadius: BorderRadius.circular(16),
+            return ScaleTransition(
+              scale: Tween<double>(begin: 0.8, end: 1).animate(
+                CurvedAnimation(
+                  parent: _tabController,
+                  curve: Interval(
+                    index * 0.1,
+                    (index * 0.1) + 0.4,
+                    curve: Curves.easeOut,
+                  ),
+                ),
               ),
-              child: Stack(
-                children: [
-                  Container(
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.image,
-                      color: Color(0xFF64748B),
-                      size: 48,
+              child: FadeTransition(
+                opacity: Tween<double>(begin: 0, end: 1).animate(
+                  CurvedAnimation(
+                    parent: _tabController,
+                    curve: Interval(
+                      index * 0.1,
+                      (index * 0.1) + 0.4,
+                      curve: Curves.easeOut,
                     ),
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton(
-                      onPressed: () => _deleteGalleryItem(img.id),
-                      icon: const Icon(
-                        Icons.delete,
-                        color: Colors.red,
-                        size: 20,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    border: Border.all(color: const Color(0xFF334155)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Stack(
+                    children: [
+                      Container(
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image,
+                          color: Color(0xFF64748B),
+                          size: 48,
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          onPressed: () => _deleteGalleryItem(img.id),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -595,11 +679,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHistoryTab() {
-    return ListView(
+    return ListView.builder(
       padding: const EdgeInsets.all(16),
-      children: receipts
-          .map(
-            (receipt) => Container(
+      itemCount: receipts.length,
+      itemBuilder: (context, index) {
+        final receipt = receipts[index];
+        return SlideTransition(
+          position:
+              Tween<Offset>(
+                begin: const Offset(-0.5, 0),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: _tabController,
+                  curve: Interval(
+                    index * 0.08,
+                    (index * 0.08) + 0.4,
+                    curve: Curves.easeOut,
+                  ),
+                ),
+              ),
+          child: FadeTransition(
+            opacity: Tween<double>(begin: 0, end: 1).animate(
+              CurvedAnimation(
+                parent: _tabController,
+                curve: Interval(
+                  index * 0.08,
+                  (index * 0.08) + 0.4,
+                  curve: Curves.easeOut,
+                ),
+              ),
+            ),
+            child: Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -661,8 +772,9 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-          )
-          .toList(),
+          ),
+        );
+      },
     );
   }
 
