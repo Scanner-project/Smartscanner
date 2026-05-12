@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,12 +12,10 @@ import 'components/camera_scanner.dart';
 import 'services/storage_service.dart';
 import 'types.dart';
 
-void main() async { 
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final cameras = await availableCameras();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp(cameras: cameras));
 }
 
@@ -75,7 +71,8 @@ class _HomePageState extends State<HomePage> {
     final budget = await StorageService.getMonthlyBudget();
     setState(() {
       receipts = loadedReceipts;
-      galleryImages = loadedImages..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      galleryImages = loadedImages
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
       monthlyBudget = budget;
     });
   }
@@ -96,45 +93,54 @@ class _HomePageState extends State<HomePage> {
     try {
       // 1. Text Recognizer eken Photo eke thiyena akuru tika mulin kiyawagannawa
       final inputImage = InputImage.fromFilePath(imagePath);
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      
+      final textRecognizer = TextRecognizer(
+        script: TextRecognitionScript.latin,
+      );
+      final RecognizedText recognizedText = await textRecognizer.processImage(
+        inputImage,
+      );
+
       String fullText = recognizedText.text;
       List<String> lines = fullText.split('\n');
       textRecognizer.close();
 
       // 2. Aluth Entity Extractor Model eka start karanawa
       // Meken thama e akuru asse thiyena "Theruma" (Dates, Money) allanne
-      final entityExtractor = EntityExtractor(language: EntityExtractorLanguage.english);
+      final entityExtractor = EntityExtractor(
+        language: EntityExtractorLanguage.english,
+      );
       final annotations = await entityExtractor.annotateText(fullText);
 
       String shopName = lines.isNotEmpty ? lines.first.trim() : "Unknown Shop";
       double totalAmount = 0.0;
-      String date = DateTime.now().toIso8601String(); // Default date eka ada dawasa
+      String date = DateTime.now()
+          .toIso8601String(); // Default date eka ada dawasa
 
       // AI eka hoyagaththa dewal (Annotations) asse yanawa
       for (final annotation in annotations) {
         for (final entity in annotation.entities) {
-          
           // A. Salli Ganan (Money) model eken alluwada balanawa
           if (entity.type == EntityType.money) {
             // "Rs 1500" wage aawoth akuru tika ain karala 1500 gannawa
-            String moneyText = annotation.text.replaceAll(RegExp(r'[^0-9.]'), '');
+            String moneyText = annotation.text.replaceAll(
+              RegExp(r'[^0-9.]'),
+              '',
+            );
             double val = double.tryParse(moneyText) ?? 0.0;
-            
+
             // Receipt ekaka thiyena loku ma ganana apage "Total" eka widihata gannawa
             if (val > totalAmount) {
               totalAmount = val;
             }
           }
-          
           // B. Dawasa (Date/Time) model eken alluwada balanawa
           else if (entity.type == EntityType.dateTime) {
-            date = annotation.text; // AI eka extract karapu dawasa ehemma gannawa
+            date =
+                annotation.text; // AI eka extract karapu dawasa ehemma gannawa
           }
         }
       }
-      
+
       entityExtractor.close();
 
       // 3. Database ekata save karanawa
@@ -142,13 +148,12 @@ class _HomePageState extends State<HomePage> {
         'storeName': shopName,
         'totalAmount': totalAmount,
         'date': date,
-        'category': 'Other', 
-        'rawText': fullText, 
+        'category': 'Other',
+        'rawText': fullText,
       });
 
       // 4. App eke UI eka update karanawa
       await _loadData();
-
     } catch (e) {
       setState(() => analysisError = "Error scanning: $e");
     } finally {
@@ -160,16 +165,16 @@ class _HomePageState extends State<HomePage> {
   Future<void> _pickFromGallery() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    
+
     if (pickedFile != null) {
-      setState(() => isFabOpen = false); 
-      await _processReceipt(pickedFile.path); 
+      setState(() => isFabOpen = false);
+      await _processReceipt(pickedFile.path);
     }
   }
 
   void _showImageSourceOptions() {
     setState(() => isFabOpen = true);
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E293B),
@@ -212,7 +217,11 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Widget _buildOptionBtn({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildOptionBtn({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -228,8 +237,11 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            label, 
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -248,8 +260,14 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text("Delete Target", style: TextStyle(color: Colors.white)),
-        content: const Text("Are you sure?", style: TextStyle(color: Colors.white70)),
+        title: const Text(
+          "Delete Target",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          "Are you sure?",
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -276,7 +294,10 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
         title: const Text("Delete Bill", style: TextStyle(color: Colors.white)),
-        content: const Text("Delete this bill?", style: TextStyle(color: Colors.white70)),
+        content: const Text(
+          "Delete this bill?",
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -310,14 +331,20 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(
                     color: Color(0xFF1E293B),
-                    border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFF334155)),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+                          Icon(
+                            Icons.qr_code_scanner,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                           SizedBox(width: 12),
                           Text(
                             'SmartScan Pro',
@@ -332,7 +359,10 @@ class _HomePageState extends State<HomePage> {
                       GestureDetector(
                         onTap: _changeBudget,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF334155),
                             borderRadius: BorderRadius.circular(20),
@@ -372,7 +402,11 @@ class _HomePageState extends State<HomePage> {
                         ),
                         IconButton(
                           onPressed: () => setState(() => analysisError = null),
-                          icon: const Icon(Icons.close, color: Color(0xFF818CF8), size: 20),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Color(0xFF818CF8),
+                            size: 20,
+                          ),
                         ),
                       ],
                     ),
@@ -381,7 +415,10 @@ class _HomePageState extends State<HomePage> {
                   child: IndexedStack(
                     index: activeTab,
                     children: [
-                      Dashboard(receipts: receipts, monthlyBudget: monthlyBudget),
+                      Dashboard(
+                        receipts: receipts,
+                        monthlyBudget: monthlyBudget,
+                      ),
                       _buildGalleryTab(),
                       _buildHistoryTab(),
                     ],
@@ -396,7 +433,10 @@ class _HomePageState extends State<HomePage> {
               child: FloatingActionButton(
                 onPressed: _showImageSourceOptions,
                 backgroundColor: const Color(0xFF8B5CF6),
-                child: Icon(isFabOpen ? Icons.close : Icons.add, color: Colors.white),
+                child: Icon(
+                  isFabOpen ? Icons.close : Icons.add,
+                  color: Colors.white,
+                ),
               ),
             ),
             // Bottom nav
@@ -405,7 +445,10 @@ class _HomePageState extends State<HomePage> {
               left: 0,
               right: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 16,
+                ),
                 decoration: const BoxDecoration(
                   color: Color(0xFF1E293B),
                   border: Border(top: BorderSide(color: Color(0xFF334155))),
@@ -424,7 +467,7 @@ class _HomePageState extends State<HomePage> {
             if (showScanner)
               Positioned.fill(
                 child: CameraScanner(
-                  onCapture: _processReceipt, 
+                  onCapture: _processReceipt,
                   onClose: () => setState(() => showScanner = false),
                 ),
               ),
@@ -451,7 +494,9 @@ class _HomePageState extends State<HomePage> {
           Text(
             label,
             style: TextStyle(
-              color: isActive ? const Color(0xFF818CF8) : const Color(0xFF64748B),
+              color: isActive
+                  ? const Color(0xFF818CF8)
+                  : const Color(0xFF64748B),
               fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
@@ -522,14 +567,22 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Container(
                     alignment: Alignment.center,
-                    child: const Icon(Icons.image, color: Color(0xFF64748B), size: 48),
+                    child: const Icon(
+                      Icons.image,
+                      color: Color(0xFF64748B),
+                      size: 48,
+                    ),
                   ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: IconButton(
                       onPressed: () => _deleteGalleryItem(img.id),
-                      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                      icon: const Icon(
+                        Icons.delete,
+                        color: Colors.red,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
@@ -544,54 +597,72 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHistoryTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: receipts.map((receipt) => Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withValues(alpha: 0.8),
-          border: Border.all(color: const Color(0xFF334155)),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      children: receipts
+          .map(
+            (receipt) => Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.8),
+                border: Border.all(color: const Color(0xFF334155)),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    receipt.storeName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          receipt.storeName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          receipt.date,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    receipt.date,
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  Column(
+                    children: [
+                      const Text(
+                        'Rs.',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        receipt.total.toStringAsFixed(2),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => _deleteReceipt(receipt.id),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Color(0xFFEF4444),
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
             ),
-            Column(
-              children: [
-                const Text(
-                  'Rs.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                ),
-                Text(
-                  receipt.total.toStringAsFixed(2),
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            IconButton(
-              onPressed: () => _deleteReceipt(receipt.id),
-              icon: const Icon(Icons.close, color: Color(0xFFEF4444), size: 20),
-            ),
-          ],
-        ),
-      )).toList(),
+          )
+          .toList(),
     );
   }
 
@@ -640,8 +711,12 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Expanded(
                       child: TextButton(
-                        onPressed: () => setState(() => showBudgetModal = false),
-                        child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                        onPressed: () =>
+                            setState(() => showBudgetModal = false),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -657,8 +732,16 @@ class _HomePageState extends State<HomePage> {
                             _saveData();
                           }
                         },
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
-                        child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                        ),
+                        child: const Text(
+                          'Save',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                   ],
