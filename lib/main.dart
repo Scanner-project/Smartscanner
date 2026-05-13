@@ -1,32 +1,28 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:google_mlkit_entity_extraction/google_mlkit_entity_extraction.dart'; // Aluth AI Model eka
-import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'components/dashboard.dart';
 import 'components/camera_scanner.dart';
-import 'services/storage_service.dart';
-import 'types.dart';
+import 'view_models/app_state.dart';
 
-void main() async { 
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp(cameras: cameras));
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppState()..loadData(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  final List<CameraDescription> cameras;
-
-  const MyApp({super.key, required this.cameras});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -52,124 +48,25 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<Receipt> receipts = [];
-  List<GalleryImage> galleryImages = [];
   bool showScanner = false;
-  bool isAnalyzing = false;
   bool isFabOpen = false;
-  String? analysisError;
-  double monthlyBudget = 20000;
   int activeTab = 0;
   bool showBudgetModal = false;
   String tempBudget = '20000';
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    final loadedReceipts = await StorageService.getAllReceipts();
-    final loadedImages = await StorageService.getAllGalleryImages();
-    final budget = await StorageService.getMonthlyBudget();
-    setState(() {
-      receipts = loadedReceipts;
-      galleryImages = loadedImages..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      monthlyBudget = budget;
-    });
-  }
-
-  Future<void> _saveData() async {
-    await StorageService.saveReceipts(receipts, monthlyBudget);
-  }
-
-  // ==========================================================
-  // MEKA THAMAI ALUTH "PRO AI BRAIN" EKA 🔥
-  // ==========================================================
   Future<void> _processReceipt(String imagePath) async {
-    setState(() {
-      showScanner = false;
-      isAnalyzing = true;
-    });
-
-    try {
-      // 1. Text Recognizer eken Photo eke thiyena akuru tika mulin kiyawagannawa
-      final inputImage = InputImage.fromFilePath(imagePath);
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      
-      String fullText = recognizedText.text;
-      List<String> lines = fullText.split('\n');
-      textRecognizer.close();
-
-      // 2. Aluth Entity Extractor Model eka start karanawa
-      // Meken thama e akuru asse thiyena "Theruma" (Dates, Money) allanne
-      final entityExtractor = EntityExtractor(language: EntityExtractorLanguage.english);
-      final annotations = await entityExtractor.annotateText(fullText);
-
-      String shopName = lines.isNotEmpty ? lines.first.trim() : "Unknown Shop";
-      double totalAmount = 0.0;
-      String date = DateTime.now().toIso8601String(); // Default date eka ada dawasa
-
-      // AI eka hoyagaththa dewal (Annotations) asse yanawa
-      for (final annotation in annotations) {
-        for (final entity in annotation.entities) {
-          
-          // A. Salli Ganan (Money) model eken alluwada balanawa
-          if (entity.type == EntityType.money) {
-            // "Rs 1500" wage aawoth akuru tika ain karala 1500 gannawa
-            String moneyText = annotation.text.replaceAll(RegExp(r'[^0-9.]'), '');
-            double val = double.tryParse(moneyText) ?? 0.0;
-            
-            // Receipt ekaka thiyena loku ma ganana apage "Total" eka widihata gannawa
-            if (val > totalAmount) {
-              totalAmount = val;
-            }
-          }
-          
-          // B. Dawasa (Date/Time) model eken alluwada balanawa
-          else if (entity.type == EntityType.dateTime) {
-            date = annotation.text; // AI eka extract karapu dawasa ehemma gannawa
-          }
-        }
-      }
-      
-      entityExtractor.close();
-
-      // 3. Database ekata save karanawa
-      await FirebaseFirestore.instance.collection('receipts').add({
-        'storeName': shopName,
-        'totalAmount': totalAmount,
-        'date': date,
-        'category': 'Other', 
-        'rawText': fullText, 
-      });
-
-      // 4. App eke UI eka update karanawa
-      await _loadData();
-
-    } catch (e) {
-      setState(() => analysisError = "Error scanning: $e");
-    } finally {
-      setState(() => isAnalyzing = false);
-    }
+    setState(() => showScanner = false);
+    await context.read<AppState>().processReceipt(imagePath);
   }
-  // ==========================================================
 
   Future<void> _pickFromGallery() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (pickedFile != null) {
-      setState(() => isFabOpen = false); 
-      await _processReceipt(pickedFile.path); 
-    }
+    setState(() => isFabOpen = false);
+    await context.read<AppState>().pickImageFromGallery();
   }
 
   void _showImageSourceOptions() {
     setState(() => isFabOpen = true);
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E293B),
@@ -228,17 +125,17 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            label, 
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            label,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  void _changeBudget() {
+  void _changeBudget(double currentBudget) {
     setState(() {
-      tempBudget = monthlyBudget.toString();
+      tempBudget = currentBudget.toString();
       showBudgetModal = true;
     });
   }
@@ -248,22 +145,19 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text("Delete Target", style: TextStyle(color: Colors.white)),
-        content: const Text("Are you sure?", style: TextStyle(color: Colors.white70)),
+        title: const Text('Delete Target', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure?', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              setState(() {
-                galleryImages.removeWhere((img) => img.id == id);
-              });
-              StorageService.deleteGalleryImage(id);
+              context.read<AppState>().deleteGalleryItem(id);
               Navigator.pop(context);
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -275,22 +169,19 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text("Delete Bill", style: TextStyle(color: Colors.white)),
-        content: const Text("Delete this bill?", style: TextStyle(color: Colors.white70)),
+        title: const Text('Delete Bill', style: TextStyle(color: Colors.white)),
+        content: const Text('Delete this bill?', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              setState(() {
-                receipts.removeWhere((r) => r.id == id);
-              });
-              _saveData();
+              context.read<AppState>().deleteReceipt(id);
               Navigator.pop(context);
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -299,13 +190,14 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
             Column(
               children: [
-                // Header
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(
@@ -330,7 +222,7 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                       GestureDetector(
-                        onTap: _changeBudget,
+                        onTap: () => _changeBudget(state.monthlyBudget),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
@@ -338,7 +230,7 @@ class _HomePageState extends State<HomePage> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            'Budget: Rs. ${monthlyBudget.toStringAsFixed(0)}',
+                          'Budget: Rs. ${state.monthlyBudget.toStringAsFixed(0)}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -350,12 +242,12 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                if (analysisError != null)
+                if (state.analysisError != null)
                   Container(
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                      color: const Color(0xFF1E293B).withOpacity(0.6),
                       border: Border.all(color: const Color(0xFF818CF8)),
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -363,7 +255,7 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Expanded(
                           child: Text(
-                            analysisError!,
+                            state.analysisError!,
                             style: const TextStyle(
                               color: Color(0xFF818CF8),
                               fontSize: 14,
@@ -371,7 +263,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         IconButton(
-                          onPressed: () => setState(() => analysisError = null),
+                          onPressed: () => context.read<AppState>().clearError(),
                           icon: const Icon(Icons.close, color: Color(0xFF818CF8), size: 20),
                         ),
                       ],
@@ -381,15 +273,14 @@ class _HomePageState extends State<HomePage> {
                   child: IndexedStack(
                     index: activeTab,
                     children: [
-                      Dashboard(receipts: receipts, monthlyBudget: monthlyBudget),
-                      _buildGalleryTab(),
-                      _buildHistoryTab(),
+                      Dashboard(receipts: state.receipts, monthlyBudget: state.monthlyBudget),
+                      _buildGalleryTab(state.galleryImages),
+                      _buildHistoryTab(state.receipts),
                     ],
                   ),
                 ),
               ],
             ),
-            // FAB
             Positioned(
               bottom: 100,
               right: 16,
@@ -399,7 +290,6 @@ class _HomePageState extends State<HomePage> {
                 child: Icon(isFabOpen ? Icons.close : Icons.add, color: Colors.white),
               ),
             ),
-            // Bottom nav
             Positioned(
               bottom: 0,
               left: 0,
@@ -420,15 +310,15 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            if (showBudgetModal) _buildBudgetModal(),
+            if (showBudgetModal) _buildBudgetModal(state.monthlyBudget),
             if (showScanner)
               Positioned.fill(
                 child: CameraScanner(
-                  onCapture: _processReceipt, 
+                  onCapture: _processReceipt,
                   onClose: () => setState(() => showScanner = false),
                 ),
               ),
-            if (isAnalyzing) _buildAnalyzingOverlay(),
+            if (state.isAnalyzing) _buildAnalyzingOverlay(),
           ],
         ),
       ),
@@ -461,14 +351,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildGalleryTab() {
+  Widget _buildGalleryTab(List<GalleryImage> galleryImages) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B).withValues(alpha: 0.4),
+            color: const Color(0xFF1E293B).withOpacity(0.4),
             border: Border.all(color: const Color(0xFF334155)),
             borderRadius: BorderRadius.circular(24),
           ),
@@ -541,14 +431,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHistoryTab() {
+  Widget _buildHistoryTab(List<Receipt> receipts) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: receipts.map((receipt) => Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withValues(alpha: 0.8),
+          color: const Color(0xFF1E293B).withOpacity(0.8),
           border: Border.all(color: const Color(0xFF334155)),
           borderRadius: BorderRadius.circular(24),
         ),
@@ -595,10 +485,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildBudgetModal() {
+  Widget _buildBudgetModal(double currentBudget) {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.9),
+        color: const Color(0xFF0F172A).withOpacity(0.9),
         child: Center(
           child: Container(
             margin: const EdgeInsets.all(16),
@@ -650,11 +540,8 @@ class _HomePageState extends State<HomePage> {
                         onPressed: () {
                           final num? value = num.tryParse(tempBudget);
                           if (value != null && value > 0) {
-                            setState(() {
-                              monthlyBudget = value.toDouble();
-                              showBudgetModal = false;
-                            });
-                            _saveData();
+                            context.read<AppState>().updateBudget(value.toDouble());
+                            setState(() => showBudgetModal = false);
                           }
                         },
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
@@ -674,7 +561,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildAnalyzingOverlay() {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+        color: const Color(0xFF0F172A).withOpacity(0.8),
         child: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
