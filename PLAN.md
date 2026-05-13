@@ -1,17 +1,21 @@
-Critical errors and bottlenecks I see:
+# Critical errors and bottlenecks I see:
 
-Broken data flow (highest risk)
+1. Broken data flow (highest risk)
 /home/runner/work/Smartscanner/Smartscanner/lib/main.dart writes scanned receipts to Firestore in _processReceipt, but UI reads receipts from local StorageService.
 Result: newly scanned receipts may not appear in Dashboard/Archive, causing silent data inconsistency.
-Unused/abandoned AI path
+
+2. Unused/abandoned AI path
 /home/runner/work/Smartscanner/Smartscanner/lib/services/gemini_service.dart is implemented but not integrated.
 Team may think Gemini logic is active, but runtime uses ML Kit path only.
-Gallery feature is structurally incomplete
+
+3. Gallery feature is structurally incomplete
 GalleryImage model and saveGalleryImage exist, but scan/gallery flow does not persist image records consistently.
 Vault tab therefore risks being empty/inaccurate relative to user actions.
-OCR pipeline quality limitations
+
+4. OCR pipeline quality limitations
 TextRecognizer is locked to Latin script while prompt/comments imply Sinhala/Tamil support.
-Entity extraction uses English model only; currency/date parsing and amount detection can be wrong or unstable for local receipts.
+
+5. Entity extraction uses English model only; currency/date parsing and amount detection can be wrong or unstable for local receipts.
 Performance bottleneck in UI compute path
 Dashboard recomputes per-day and per-category aggregations in widget build.
 As receipt count grows, repeated parsing/filtering in build can degrade rendering responsiveness.
