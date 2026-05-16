@@ -20,6 +20,7 @@ class Receipt {
   final double total;
   final Category category;
   final int timestamp;
+  String? firestoreId;
   final String? rawText;
   final String? galleryImageId;
 
@@ -32,6 +33,7 @@ class Receipt {
     required this.total,
     required this.category,
     required this.timestamp,
+    this.firestoreId,
     this.rawText,
     this.galleryImageId,
   });
@@ -47,6 +49,7 @@ class Receipt {
     'timestamp': timestamp,
     'rawText': rawText,
     'galleryImageId': galleryImageId,
+    'firestoreId': firestoreId,
   };
 
   factory Receipt.fromJson(Map<String, dynamic> json) => Receipt(
@@ -60,6 +63,7 @@ class Receipt {
     timestamp: json['timestamp'],
     rawText: json['rawText'] as String?,
     galleryImageId: json['galleryImageId'],
+    firestoreId: json['firestoreId'] as String?,
   );
 }
 

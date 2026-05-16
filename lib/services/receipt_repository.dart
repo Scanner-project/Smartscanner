@@ -26,19 +26,31 @@ class ReceiptRepository {
   ) async {
     final updatedReceipts = [receipt, ...currentReceipts];
     await saveReceipts(updatedReceipts, monthlyBudget);
-    await _publishReceiptToFirestore(receipt);
+    final docId = await _publishReceiptToFirestore(receipt);
+    if (docId != null) {
+      // persist the firestoreId into local storage
+      receipt.firestoreId = docId;
+      await saveReceipts(updatedReceipts, monthlyBudget);
+    }
   }
 
-  static Future<void> _publishReceiptToFirestore(Receipt receipt) async {
-    await FirebaseFirestore.instance.collection('receipts').add({
-      'storeName': receipt.storeName,
-      'totalAmount': receipt.total,
-      'date': receipt.date,
-      'time': receipt.time,
-      'category': receipt.category.name,
-      'rawText': receipt.rawText ?? '',
-      'items': receipt.items.map((item) => item.toJson()).toList(),
-      'timestamp': receipt.timestamp,
-    });
+  static Future<String?> _publishReceiptToFirestore(Receipt receipt) async {
+    try {
+      final docRef = await FirebaseFirestore.instance.collection('receipts').add({
+        'localId': receipt.id,
+        'storeName': receipt.storeName,
+        'totalAmount': receipt.total,
+        'date': receipt.date,
+        'time': receipt.time,
+        'category': receipt.category.name,
+        'rawText': receipt.rawText ?? '',
+        'items': receipt.items.map((item) => item.toJson()).toList(),
+        'timestamp': receipt.timestamp,
+      });
+      return docRef.id;
+    } catch (e) {
+      // Firestore publish failed; leave local data intact and surface the error upstream if needed.
+      return null;
+    }
   }
 }
