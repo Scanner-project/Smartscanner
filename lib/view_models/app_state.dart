@@ -56,6 +56,10 @@ class AppState extends ChangeNotifier {
       await ReceiptRepository.saveGalleryImage(galleryImage);
       notifyListeners();
       await processReceipt(pickedFile.path);
+      // Mark as processed after successful scan
+      galleryImage.isProcessed = true;
+      await ReceiptRepository.saveGalleryImage(galleryImage);
+      notifyListeners();
     }
   }
 

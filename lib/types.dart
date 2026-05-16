@@ -59,7 +59,10 @@ class Receipt {
     time: json['time'],
     items: (json['items'] as List).map((e) => ReceiptItem.fromJson(e)).toList(),
     total: (json['total'] as num).toDouble(),
-    category: Category.values.firstWhere((e) => e.name == json['category']),
+    category: Category.values.firstWhere(
+      (e) => e.name == json['category'],
+      orElse: () => Category.Other,
+    ),
     timestamp: json['timestamp'],
     rawText: json['rawText'] as String?,
     galleryImageId: json['galleryImageId'],
@@ -86,8 +89,11 @@ class ReceiptItem {
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) => ReceiptItem(
     name: json['name'],
-    price: json['price'],
-    category: Category.values.firstWhere((e) => e.name == json['category']),
+    price: (json['price'] as num).toDouble(),
+    category: Category.values.firstWhere(
+      (e) => e.name == json['category'],
+      orElse: () => Category.Other,
+    ),
   );
 }
 
