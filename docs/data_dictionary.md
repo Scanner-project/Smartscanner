@@ -1,3 +1,87 @@
+# Data Dictionary — SmartScanner
+
+This file describes the core entities, their field types, required/optional status, serialization keys, defaults, and persistence mapping as implemented in the codebase.
+
+## Category (enum)
+- Values: Food, Furniture, Stationery, Medicine, BabyAccessories, MobileAccessories, PetItems, BankPayment, Transport, Other
+- Stored as: string (enum.name)
+
+## Receipt
+- Type: object
+- Required fields:
+  - `id` (String)
+  - `storeName` (String)
+  - `date` (String)
+  - `time` (String)
+  - `items` (List<ReceiptItem>)
+  - `total` (double)
+  - `category` (Category) stored as enum.name
+  - `timestamp` (int)
+- Optional fields:
+  - `rawText` (String?)
+  - `galleryImageId` (String?)
+- Serialization keys (toJson/fromJson): `id`, `storeName`, `date`, `time`, `items`, `total`, `category`, `timestamp`, `rawText`, `galleryImageId`
+
+## ReceiptItem
+- Type: object
+- Fields:
+  - `name` (String) — required
+  - `price` (double) — required
+  - `category` (Category) stored as enum.name — required
+- Serialization keys: `name`, `price`, `category`
+
+## GalleryImage
+- Type: object
+- Required fields:
+  - `id` (String)
+  - `base64` (String) — image bytes base64-encoded
+  - `timestamp` (int)
+- Optional fields:
+  - `isProcessed` (bool) default: false
+  - `linkedReceiptId` (String?)
+- Serialization keys: `id`, `base64`, `timestamp`, `isProcessed`, `linkedReceiptId`
+
+## AppState (state fields)
+- `receipts` : List<Receipt> — in-memory list of receipts
+- `galleryImages` : List<GalleryImage> — in-memory gallery
+- `isAnalyzing` : bool — processing flag
+- `analysisError` : String? — last analysis error message
+- `monthlyBudget` : double — persisted in receipts storage bundle
+
+Mutation points (where these are updated):
+- `AppState.loadData()` — loads `receipts`, `galleryImages`, and `monthlyBudget` from `ReceiptRepository` and notifies listeners.
+- `AppState.processReceipt(imagePath)` — toggles `isAnalyzing`, calls processing service, saves receipt via `ReceiptRepository.addReceipt`, inserts into `receipts` and notifies.
+- `AppState.pickImageFromGallery()` — creates `GalleryImage`, saves via `ReceiptRepository.saveGalleryImage`, inserts into `galleryImages`, then calls `processReceipt`.
+- `AppState.deleteGalleryItem(id)` — removes from `galleryImages`, calls `ReceiptRepository.deleteGalleryImage`.
+- `AppState.deleteReceipt(id)` and `updateBudget(value)` — persist receipts and monthlyBudget via `ReceiptRepository.saveReceipts`.
+
+## Persistence mapping
+- Local storage (SharedPreferences):
+  - Receipts & budget stored under key: `receipt_app_pro_v5_data`.
+    - JSON shape: { "receipts": [ ...Receipt objects... ], "monthlyBudget": <number> }
+  - Gallery images stored under key: `receipt_app_gallery_v5`.
+    - JSON shape: array of `GalleryImage` JSON objects
+
+- Firestore: collection `receipts` (published on add)
+  - Fields written when publishing:
+    - `storeName` (String)
+    - `totalAmount` (number)  <-- note: code uses `totalAmount` here
+    - `date` (String)
+    - `time` (String)
+    - `category` (String)
+    - `rawText` (String)
+    - `items` (List<Map<String, dynamic>>) — each item uses `name`, `price`, `category`
+    - `timestamp` (int)
+
+## Notes and constraints
+- The in-code `Receipt.toJson()` uses the key `total` while Firestore publish uses `totalAmount` — this is an intentional implementation detail and a potential mismatch for downstream consumers.
+- Processed receipts produced by `ReceiptProcessingService` currently set `items` to an empty list and `category` to `Category.Other` by default.
+
+## Checklist for agents
+- Verify enum values are exhaustive vs UI expectations.
+- Confirm whether Firestore consumers expect `total` or `totalAmount` and unify.
+- Add mapping matrix from local storage shape → Firestore shape.
+- Add unit tests for (de)serialization of `Receipt` and `GalleryImage`.
 # Data Dictionary
 
 This document defines the exact data structures, field types, constraints, and persistence contracts for SmartScanner. Future agents must reference this when reading, writing, or transforming receipt data.
