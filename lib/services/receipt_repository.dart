@@ -30,15 +30,22 @@ class ReceiptRepository {
   }
 
   static Future<void> _publishReceiptToFirestore(Receipt receipt) async {
-    await FirebaseFirestore.instance.collection('receipts').add({
-      'storeName': receipt.storeName,
-      'totalAmount': receipt.total,
-      'date': receipt.date,
-      'time': receipt.time,
-      'category': receipt.category.name,
-      'rawText': receipt.rawText ?? '',
-      'items': receipt.items.map((item) => item.toJson()).toList(),
-      'timestamp': receipt.timestamp,
-    });
+    try {
+      await FirebaseFirestore.instance.collection('receipts').add({
+        'storeName': receipt.storeName,
+        'totalAmount': receipt.total,
+        'date': receipt.date,
+        'time': receipt.time,
+        'category': receipt.category.name,
+        'rawText': receipt.rawText ?? '',
+        'items': receipt.items.map((item) => item.toJson()).toList(),
+        'timestamp': receipt.timestamp,
+      });
+    } catch (e) {
+      // Firestore sync is best-effort: local persistence has already succeeded,
+      // so do not let remote publish failures prevent the caller from updating
+      // in-memory/UI state.
+      print('Failed to publish receipt to Firestore: $e');
+    }
   }
 }
