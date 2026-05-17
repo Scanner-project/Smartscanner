@@ -7,32 +7,39 @@ class ReceiptProcessingService {
   static Future<Receipt> processReceiptImage(String imagePath) async {
     final inputImage = InputImage.fromFilePath(imagePath);
     final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-    final recognizedText = await textRecognizer.processImage(inputImage);
-    final fullText = recognizedText.text;
-    await textRecognizer.close();
+    late final String fullText;
+
+    try {
+      final recognizedText = await textRecognizer.processImage(inputImage);
+      fullText = recognizedText.text;
+    } finally {
+      await textRecognizer.close();
+    }
 
     final entityExtractor = EntityExtractor(language: EntityExtractorLanguage.english);
-    final annotations = await entityExtractor.annotateText(fullText);
-
     String shopName = _extractShopName(fullText);
     String date = DateTime.now().toIso8601String();
     double totalAmount = 0.0;
 
-    for (final annotation in annotations) {
-      for (final entity in annotation.entities) {
-        if (entity.type == EntityType.money) {
-          final moneyText = annotation.text.replaceAll(RegExp(r'[^0-9.]'), '');
-          final val = double.tryParse(moneyText) ?? 0.0;
-          if (val > totalAmount) {
-            totalAmount = val;
+    try {
+      final annotations = await entityExtractor.annotateText(fullText);
+
+      for (final annotation in annotations) {
+        for (final entity in annotation.entities) {
+          if (entity.type == EntityType.money) {
+            final moneyText = annotation.text.replaceAll(RegExp(r'[^0-9.]'), '');
+            final val = double.tryParse(moneyText) ?? 0.0;
+            if (val > totalAmount) {
+              totalAmount = val;
+            }
+          } else if (entity.type == EntityType.dateTime) {
+            date = annotation.text;
           }
-        } else if (entity.type == EntityType.dateTime) {
-          date = annotation.text;
         }
       }
+    } finally {
+      await entityExtractor.close();
     }
-
-    await entityExtractor.close();
 
     return Receipt(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
