@@ -32,7 +32,9 @@ SmartScanner is a receipt scanning and expense tracking application. The app ena
 - Store receipts locally in SharedPreferences (unencrypted).
 - Persist monthly budget value locally.
 - Publish receipts to Firestore for cross-device sync (read path not yet unified; see Known Issues).
-- Each receipt record contains: id, storeName, date, time, total, category, timestamp, rawText (OCR output), galleryImageId (optional link).
+- Each receipt record contains: id, storeName, date, time, total, category, timestamp, rawText (OCR output), galleryImageId (optional link), and `firestoreId` (optional) when synchronized to Firestore.
+
+Sync model (current implementation): Local-first. Receipts are persisted locally in SharedPreferences and are published to Firestore asynchronously. After a successful Firestore write, the Firestore document id is captured as `firestoreId` and persisted into the local receipt record to enable reliable cross-referencing and reconciliation.
 
 ### Receipt Organization & Management
 - Categorize receipts into 10 predefined categories: Food, Furniture, Stationery, Medicine, BabyAccessories, MobileAccessories, PetItems, BankPayment, Transport, Other.

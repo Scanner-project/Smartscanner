@@ -18,12 +18,19 @@ class Dashboard extends StatelessWidget {
     final last7Days = List.generate(7, (i) {
       final date = DateTime.now().subtract(Duration(days: i));
       final dayTotal = receipts
-          .where((r) => DateTime.parse(r.date).day == date.day &&
-                        DateTime.parse(r.date).month == date.month &&
-                        DateTime.parse(r.date).year == date.year)
+          .where((r) {
+            try {
+              final parsed = DateTime.parse(r.date);
+              return parsed.day == date.day &&
+                     parsed.month == date.month &&
+                     parsed.year == date.year;
+            } catch (e) {
+              return false; // Skip receipts with invalid dates
+            }
+          })
           .fold<double>(0.0, (sum, r) => sum + r.total);
       return BarChartGroupData(
-        x: i, // <-- Fix eka methanai! (.toDouble() eka ain kala)
+        x: i.toDouble(),
         barRods: [
           BarChartRodData(
             toY: dayTotal,

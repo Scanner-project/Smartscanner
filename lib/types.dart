@@ -20,6 +20,7 @@ class Receipt {
   final double total;
   final Category category;
   final int timestamp;
+  String? firestoreId;
   final String? rawText;
   final String? galleryImageId;
 
@@ -32,6 +33,7 @@ class Receipt {
     required this.total,
     required this.category,
     required this.timestamp,
+    this.firestoreId,
     this.rawText,
     this.galleryImageId,
   });
@@ -47,6 +49,7 @@ class Receipt {
     'timestamp': timestamp,
     'rawText': rawText,
     'galleryImageId': galleryImageId,
+    'firestoreId': firestoreId,
   };
 
   factory Receipt.fromJson(Map<String, dynamic> json) => Receipt(
@@ -56,10 +59,14 @@ class Receipt {
     time: json['time'],
     items: (json['items'] as List).map((e) => ReceiptItem.fromJson(e)).toList(),
     total: (json['total'] as num).toDouble(),
-    category: Category.values.firstWhere((e) => e.name == json['category']),
+    category: Category.values.firstWhere(
+      (e) => e.name == json['category'],
+      orElse: () => Category.Other,
+    ),
     timestamp: json['timestamp'],
     rawText: json['rawText'] as String?,
     galleryImageId: json['galleryImageId'],
+    firestoreId: json['firestoreId'] as String?,
   );
 }
 
@@ -82,8 +89,11 @@ class ReceiptItem {
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) => ReceiptItem(
     name: json['name'],
-    price: json['price'],
-    category: Category.values.firstWhere((e) => e.name == json['category']),
+    price: (json['price'] as num).toDouble(),
+    category: Category.values.firstWhere(
+      (e) => e.name == json['category'],
+      orElse: () => Category.Other,
+    ),
   );
 }
 
