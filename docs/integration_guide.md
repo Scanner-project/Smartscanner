@@ -2,15 +2,28 @@
 
 This short guide covers wiring an external LLM/assistant (e.g., Gemini-style service) and recommendations for unifying local vs Firestore storage.
 
-## Gemini / LLM integration (not currently present in code)
-- Purpose: use an external LLM to improve receipt parsing (item extraction, categorization), prompt-based correction, or verification.
-- Recommended approach:
-  1. Feature-flag integration behind a runtime config or environment variable (e.g., `ENABLE_GEMINI=true`).
- 2. Store API keys in secure platform mechanisms (Android: encrypted preferences / keystore; iOS: Keychain). Avoid hardcoding keys in the repo.
- 3. Implement a thin service `lib/services/llm_service.dart` with a simple interface:
-     - `Future<ParsedReceipt> parseReceiptWithLLM(String rawText)`
-     - `Future<Category> categorizeItems(List<ReceiptItem>)`
- 4. Use request batching and concurrency limits to avoid quota spikes.
+## Gemini / LLM Integration
+
+**Current Status:** [lib/services/gemini_service.dart](lib/services/gemini_service.dart) exists but is **not wired into the main application flow**. The service is implemented but not automatically invoked during receipt processing.
+
+### How to Enable Gemini Integration
+
+1. Feature-flag integration behind a runtime config or environment variable (e.g., `ENABLE_GEMINI=true`).
+2. Store API keys in secure platform mechanisms (Android: encrypted preferences / keystore; iOS: Keychain). Avoid hardcoding keys in the repo.
+3. Wire `gemini_service.dart` into [lib/services/receipt_processing_service.dart](lib/services/receipt_processing_service.dart) as an optional enhancement:
+   - Call `GeminiService.analyzeReceipt(base64Image)` after ML Kit extraction.
+   - Use Gemini results to improve item extraction, categorization, or amount validation.
+4. Use request batching and concurrency limits to avoid quota spikes.
+
+### Service Interface
+
+```dart
+// From lib/services/gemini_service.dart
+Future<String?> analyzeReceipt(String base64Image) async {
+  // Sends image to Gemini API and returns JSON response
+  // Response schema expects: { isReadable, storeName, date, time, total, category, items[] }
+}
+```
 
 ## Storage read/write unification recommendation
 - Current behavior: local-first (SharedPreferences) for app UX; receipts are appended to Firestore but not treated as canonical source.
