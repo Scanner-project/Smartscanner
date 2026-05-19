@@ -125,8 +125,35 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       );
 
       String fullText = recognizedText.text;
-      List<String> lines = fullText.split('\n');
       textRecognizer.close();
+
+      if (fullText.trim().isEmpty) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              title: const Text(
+                "Scan Failed",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              content: const Text(
+                "Photo is blurry, please retake",
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("OK", style: TextStyle(color: Color(0xFF8B5CF6))),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      List<String> lines = fullText.split('\n');
 
       // 2. Aluth Entity Extractor Model eka start karanawa
       // Meken thama e akuru asse thiyena "Theruma" (Dates, Money) allanne
