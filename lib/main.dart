@@ -477,7 +477,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   },
                   backgroundColor: const Color(0xFF8B5CF6),
                   child: Icon(
-                    isFabOpen ? Icons.close : Icons.add,
+                    isFabOpen ? Icons.close : Icons.photo_camera,
                     color: Colors.white,
                   ),
                 ),
