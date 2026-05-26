@@ -10,6 +10,8 @@ import 'firebase_options.dart';
 import 'components/dashboard.dart';
 import 'components/camera_scanner.dart';
 import 'services/storage_service.dart';
+import 'screens/auth/login_screen.dart'; // login screen
+import 'screens/auth/register_screen.dart'; // register screen
 import 'types.dart';
 
 void main() async {
@@ -35,7 +37,14 @@ class MyApp extends StatelessWidget {
           secondary: Color(0xFF818CF8),
         ),
       ),
-      home: const HomePage(),
+
+      home: const LoginScreen(),
+
+      routes: {
+        '/dashboard': (context) => const HomePage(),
+        '/register': (context) => const RegisterScreen(),
+        '/login': (context) => const LoginScreen(),
+      },
     );
   }
 }
@@ -135,7 +144,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               backgroundColor: const Color(0xFF1E293B),
               title: const Text(
                 "Scan Failed",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               content: const Text(
                 "Photo is blurry, please retake",
@@ -144,7 +156,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("OK", style: TextStyle(color: Color(0xFF8B5CF6))),
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(color: Color(0xFF8B5CF6)),
+                  ),
                 ),
               ],
             ),
